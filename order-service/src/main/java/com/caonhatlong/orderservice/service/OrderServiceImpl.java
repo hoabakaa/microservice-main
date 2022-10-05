@@ -1,5 +1,6 @@
 package com.caonhatlong.orderservice.service;
 
+import com.caonhatlong.orderservice.dto.InventoryResponse;
 import com.caonhatlong.orderservice.dto.OrderLineItemsDto;
 import com.caonhatlong.orderservice.dto.OrderRequest;
 import com.caonhatlong.orderservice.model.Order;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,13 +35,17 @@ public class OrderServiceImpl implements OrderService {
                 .collect(Collectors.toList());
         order.setOrderLineItemsList(orderLineItemsList);
 
-        Boolean result =  webClient.get()
-                .uri("http://localhost:2000/api/inventory")
+       List<String> skuCodes = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).collect(Collectors.toList());
+
+        InventoryResponse[] invetoryArrays =  webClient.get()
+                .uri("http://localhost:2000/api/inventory", uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build())
                 .retrieve()
-                .bodyToMono(Boolean.class)
+                .bodyToMono(InventoryResponse[].class)
                 .block();
 
-        if(Boolean.TRUE.equals(result)){
+        boolean allProductsInStock = Arrays.stream(invetoryArrays).allMatch(InventoryResponse::isInStock);
+
+        if(allProductsInStock){
             orderRepository.save(order);
         }else{
             throw new IllegalArgumentException("Product is not in stock, please try it later!");
